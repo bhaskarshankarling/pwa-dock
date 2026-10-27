@@ -67,16 +67,14 @@ If you'd rather not install through Chrome, the `android/` folder holds a small 
 
 ### Signing (so updates install over the old version)
 
-Without signing secrets, CI signs each build with a throwaway debug key. Android then refuses to install a newer build over the old one, and uninstalling wipes your list. To get stable signing, add these under **Settings → Secrets and variables → Actions**:
+Android installs an update only if it is signed with the **same key** as the installed app. A key mismatch forces an uninstall, and uninstalling wipes your saved apps.
 
-| Secret | Value |
-|---|---|
-| `DOCK_KEYSTORE_BASE64` | `base64 -w0 dock.keystore` |
-| `DOCK_KEYSTORE_PASSWORD` | keystore password |
-| `DOCK_KEY_ALIAS` | key alias |
-| `DOCK_KEY_PASSWORD` | key password |
+- The release key is committed **encrypted** at `android/signing/dock.keystore.enc` (AES-256-CBC, PBKDF2 with 600k iterations).
+- CI decrypts it with a single repo secret, **`DOCK_SIGNING_PASSWORD`**. Add it under **Settings → Secrets and variables → Actions**.
+- Before publishing, CI checks that the APK's certificate matches the Dock release key (SHA-256 `40:02:53:20:…:40:0E:EB:ED`).
+- If the secret is missing, the build still runs (and the APK is kept as a workflow artifact) but it is **not published** to `apk-latest`. That way you can't install an APK that won't update.
 
-Then re-run the workflow from **Actions → Build Android APK → Run workflow**. Keep the keystore backed up, because losing it means the next update requires a reinstall.
+Keep the password backed up somewhere safe. Without it, no future build can update your installed app.
 
 ### Build locally
 ```bash

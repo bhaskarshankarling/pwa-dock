@@ -28,23 +28,30 @@ jobs:
           gradle-version: '8.9'
 
       - name: Restore signing key
+        id: signing
         env:
-          KEYSTORE_B64: ${{ secrets.DOCK_KEYSTORE_BASE64 }}
+          SIGNING_PASSWORD: ${{ secrets.DOCK_SIGNING_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/dock.keystore"
-            echo "DOCK_KEYSTORE=$RUNNER_TEMP/dock.keystore" >> "$GITHUB_ENV"
-          else
-            echo "::warning::No DOCK_KEYSTORE_BASE64 secret: APK is signed with a throwaway debug key, so it cannot be installed as an update over a previous build."
+          if [ -z "$SIGNING_PASSWORD" ]; then
+            echo "::error title=Signing key missing::Add the DOCK_SIGNING_PASSWORD repo secret. Without it the APK is debug-signed and is NOT published, because it could not be installed as an update."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+            -in android/signing/dock.keystore.enc -out "$RUNNER_TEMP/dock.keystore" \
+            -pass env:SIGNING_PASSWORD
+          {
+            echo "DOCK_KEYSTORE=$RUNNER_TEMP/dock.keystore"
+            echo "DOCK_KEYSTORE_PASSWORD=$SIGNING_PASSWORD"
+            echo "DOCK_KEY_PASSWORD=$SIGNING_PASSWORD"
+            echo "DOCK_KEY_ALIAS=dock"
+          } >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
 
       - name: Build release APK
         working-directory: android
         env:
           VERSION_CODE: ${{ github.run_number }}
-          DOCK_KEYSTORE_PASSWORD: ${{ secrets.DOCK_KEYSTORE_PASSWORD }}
-          DOCK_KEY_ALIAS: ${{ secrets.DOCK_KEY_ALIAS }}
-          DOCK_KEY_PASSWORD: ${{ secrets.DOCK_KEY_PASSWORD }}
         run: |
           set -o pipefail
           gradle assembleRelease --no-daemon 2>&1 | tee build.log
@@ -66,7 +73,15 @@ jobs:
           name: pwa-dock-apk
           path: pwa-dock.apk
 
+      - name: Verify release signature
+        if: steps.signing.outputs.signed == 'true'
+        run: |
+          # Fail rather than publish an APK signed with anything but the Dock release key
+          keytool -printcert -jarfile pwa-dock.apk | tee cert.txt
+          grep -q "40:02:53:20:D3:4D:1E:02:2E:1C:2F:D5:4D:99:8C:DC:18:91:07:D9:92:90:EA:B5:B9:44:D9:16:40:0E:EB:ED" cert.txt
+
       - name: Publish to "apk-latest" release
+        if: steps.signing.outputs.signed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

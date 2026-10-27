@@ -27,6 +27,9 @@ android {
                 keyAlias System.getenv('DOCK_KEY_ALIAS')
                 keyPassword System.getenv('DOCK_KEY_PASSWORD')
             }
+            // v1 (JAR) signature alongside v2, so CI can verify the certificate with keytool
+            enableV1Signing true
+            enableV2Signing true
         }
     }
 
