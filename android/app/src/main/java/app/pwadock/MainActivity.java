@@ -163,6 +163,20 @@ public class MainActivity extends Activity {
 
     /** Exposed to the page as window.DockAndroid. Only bundled pages ever load in this WebView. */
     private class Bridge {
+        /** Opens a bookmarked app inside Dock's own WebView screen (its own recents entry). */
+        @JavascriptInterface
+        public void openApp(final String url, final String name) {
+            runOnUiThread(() -> {
+                Uri uri = Uri.parse(url);
+                String scheme = uri.getScheme();
+                if (!"http".equals(scheme) && !"https".equals(scheme)) { openExternal(uri); return; }
+                Intent open = new Intent(MainActivity.this, AppActivity.class)
+                        .setData(uri)
+                        .putExtra(AppActivity.EXTRA_NAME, name);
+                startActivity(open);
+            });
+        }
+
         @JavascriptInterface
         public void saveBackup(final String json) {
             runOnUiThread(() -> {

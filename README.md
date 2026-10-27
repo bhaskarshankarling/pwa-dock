@@ -56,7 +56,11 @@ If you'd rather not install through Chrome, the `android/` folder holds a small 
 
 - **Install**: download `pwa-dock.apk` on your phone and open it. Allow installs from your browser when Android asks.
 - **Offline, no hosting needed**: the web files are bundled into the APK and served from a local `https://appassets.androidplatform.net` origin via `WebViewAssetLoader`.
-- **Launching apps**: tapping a tile fires an Android `ACTION_VIEW` intent. If an installed PWA (WebAPK) registers a handler for that URL, Android opens it directly. Otherwise the URL opens in your default browser.
+- **In-app browser**: tapping a tile opens the app in Dock's own full-screen WebView, which gets its own entry in Android's recents, titled with the site's name and favicon. Tapping the same app again resumes it instead of reloading. The top bar has **Close**, the page title, **Share** (sends the current URL to any app, e.g. to open it later in a browser), and **⋮** for **Reload**, **Open in browser** and **Copy link**.
+  - Supports logins and cookies, file uploads, downloads (via Android's download manager), fullscreen video, and per-site prompts for camera, microphone and location.
+  - Links with non-web schemes (`mailto:`, `tel:`, `intent://`, UPI and so on) are handed to the app that handles them.
+  - Prefer the old behaviour? Choose **⋮ → Open apps in browser instead** in Dock. Taps then fire an Android `ACTION_VIEW` intent, which routes to an installed PWA (WebAPK) if one claims the URL, or to your default browser.
+  - **Limitation**: Google blocks "Sign in with Google" inside embedded WebViews. For apps that need it, use **⋮ → Open in browser**.
 - **Share sheet**: an "Add to Dock" entry is registered for shared text and links (`ACTION_SEND text/plain`).
 - **Backup**: export uses the system "Save to…" dialog, and import uses the system file picker.
 - The APK keeps its own app list, separate from the Chrome-installed PWA. Use export and import to move apps between them.

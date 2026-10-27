@@ -80,6 +80,7 @@
   </div>
   <div class="menu" id="menu">
     <button data-act="install" id="installItem" hidden>Install Dock</button>
+    <button data-act="openmode" id="openModeItem" hidden></button>
     <button data-act="export">Export backup (.json)</button>
     <button data-act="import">Import backup</button>
   </div>
@@ -202,6 +203,11 @@
       a.addEventListener('click', e => {
         if (editMode) { e.preventDefault(); openEditor(app); return; }
         app.uses = (app.uses || 0) + 1; app.lastUsed = Date.now(); save();
+        // Android APK: open inside Dock's own WebView screen unless the user chose external
+        if (window.DockAndroid?.openApp && !prefs.openExternal) {
+          e.preventDefault();
+          window.DockAndroid.openApp(app.url, app.name);
+        }
       });
       // Long-press on Android fires contextmenu: use it to edit
       a.addEventListener('contextmenu', e => { e.preventDefault(); openEditor(app); });
@@ -280,7 +286,10 @@
   menu.addEventListener('click', async e => {
     const act = e.target.dataset.act; if (!act) return;
     menu.classList.remove('open');
-    if (act === 'export') {
+    if (act === 'openmode') {
+      prefs.openExternal = !prefs.openExternal; savePrefs(); syncOpenMode();
+      toast(prefs.openExternal ? 'Apps open in browser / installed app' : 'Apps open inside Dock');
+    } else if (act === 'export') {
       const json = JSON.stringify({ version: 1, apps }, null, 2);
       if (window.DockAndroid) { window.DockAndroid.saveBackup(json); return; } // Android APK: native save dialog
       const blob = new Blob([json], { type: 'application/json' });
@@ -310,6 +319,14 @@
     } catch { toast('Invalid backup file'); }
     e.target.value = '';
   };
+
+  function syncOpenMode(){
+    const item = $('openModeItem');
+    if (!window.DockAndroid?.openApp) return;
+    item.hidden = false;
+    item.textContent = prefs.openExternal ? 'Open apps inside Dock' : 'Open apps in browser instead';
+  }
+  syncOpenMode();
 
   let tt;
   function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 1800); }
