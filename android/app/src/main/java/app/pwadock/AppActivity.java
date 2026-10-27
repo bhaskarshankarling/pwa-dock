@@ -209,7 +209,7 @@ public class AppActivity extends Activity {
                 content.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
                 web.setVisibility(View.GONE);
                 toolbar.setVisibility(View.GONE);
-                setImmersive(true);
+                setFullscreenUi(true);
             }
 
             @Override
@@ -441,11 +441,11 @@ public class AppActivity extends Activity {
         customViewCallback = null;
         web.setVisibility(View.VISIBLE);
         toolbar.setVisibility(View.VISIBLE);
-        setImmersive(false);
+        setFullscreenUi(false);
     }
 
     @SuppressWarnings("deprecation")
-    private void setImmersive(boolean on) {
+    private void setFullscreenUi(boolean on) {
         getWindow().getDecorView().setSystemUiVisibility(on
                 ? View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                 : View.SYSTEM_UI_FLAG_VISIBLE);
