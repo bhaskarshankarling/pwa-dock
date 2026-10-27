@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -45,7 +45,18 @@ jobs:
           DOCK_KEYSTORE_PASSWORD: ${{ secrets.DOCK_KEYSTORE_PASSWORD }}
           DOCK_KEY_ALIAS: ${{ secrets.DOCK_KEY_ALIAS }}
           DOCK_KEY_PASSWORD: ${{ secrets.DOCK_KEY_PASSWORD }}
-        run: gradle assembleRelease --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          gradle assembleRelease --no-daemon 2>&1 | tee build.log
+
+      - name: Report build errors
+        if: failure()
+        working-directory: android
+        run: |
+          [ -f build.log ] || exit 0
+          msg=$(grep -E -A4 "error:|^e: |What went wrong|ERROR|AAPT|FAILURE" build.log | head -60 \
+                | sed -e 's/%/%25/g' -e 's/\r//g' | sed ':a;N;$!ba;s/\n/%0A/g')
+          echo "::error title=Gradle build failed::${msg}"
 
       - name: Collect APK
         run: cp android/app/build/outputs/apk/release/app-release.apk pwa-dock.apk
