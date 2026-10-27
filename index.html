@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<meta name="description" content="Bookmark your PWAs and launch them from one place.">
+<title>Dock</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  :root{
+    --bg:#0f1115; --surface:#181b22; --surface2:#222632; --text:#e8eaf0; --muted:#8b91a1;
+    --accent:#6ea8ff; --danger:#ff6b6b; --radius:18px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f4f5f8; --surface:#ffffff; --surface2:#eceef3; --text:#14161c; --muted:#646b7b; --accent:#2f6fe0; --danger:#d63c3c; }
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  body{min-height:100dvh;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+  header{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 16px 10px}
+  .bar{display:flex;align-items:center;gap:8px}
+  h1{font-size:22px;margin:0;flex:1;letter-spacing:.2px}
+  .iconbtn{border:0;background:var(--surface);color:var(--text);width:40px;height:40px;border-radius:12px;
+    font-size:18px;display:grid;place-items:center;cursor:pointer}
+  .iconbtn.on{background:var(--accent);color:#fff}
+  .search{margin-top:12px;display:flex;gap:8px}
+  .search input,.search select{background:var(--surface);color:var(--text);border:0;border-radius:12px;
+    padding:11px 12px;font:inherit;outline:none}
+  .search input{flex:1;min-width:0}
+  main{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:18px 10px;padding:8px 16px 110px}
+  .tile{position:relative;display:flex;flex-direction:column;align-items:center;gap:7px;text-decoration:none;
+    color:var(--text);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+  .ico{width:60px;height:60px;border-radius:var(--radius);background:var(--surface);display:grid;place-items:center;
+    overflow:hidden;font-weight:700;font-size:24px;color:#fff;transition:transform .12s}
+  .tile:active .ico{transform:scale(.92)}
+  .ico img{width:100%;height:100%;object-fit:cover}
+  .ico img.fav{width:62%;height:62%;object-fit:contain}
+  .name{font-size:12px;text-align:center;max-width:78px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .editing .tile .ico{animation:wiggle .35s ease-in-out infinite alternate}
+  @keyframes wiggle{from{transform:rotate(-2deg)}to{transform:rotate(2deg)}}
+  .moves{display:none;gap:4px}
+  .editing .moves{display:flex}
+  .moves button{border:0;background:var(--surface2);color:var(--text);border-radius:8px;width:28px;height:24px;font-size:12px}
+  .empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:60px 20px}
+  .empty b{display:block;color:var(--text);font-size:17px;margin-bottom:6px}
+  .fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:18px;
+    border:0;background:var(--accent);color:#fff;font-size:30px;box-shadow:0 8px 24px rgba(0,0,0,.35);cursor:pointer}
+  dialog{border:0;border-radius:20px;background:var(--surface);color:var(--text);width:min(420px,calc(100vw - 32px));padding:20px}
+  dialog::backdrop{background:rgba(0,0,0,.55)}
+  dialog h2{margin:0 0 14px;font-size:18px}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+  dialog input{width:100%;background:var(--surface2);color:var(--text);border:0;border-radius:10px;padding:11px 12px;font:inherit;outline:none}
+  .row{display:flex;gap:8px;margin-top:18px}
+  .btn{flex:1;border:0;border-radius:12px;padding:12px;font:inherit;font-weight:600;cursor:pointer;background:var(--surface2);color:var(--text)}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.danger{background:transparent;color:var(--danger);flex:0 0 auto}
+  .menu{position:absolute;right:16px;top:58px;background:var(--surface);border-radius:14px;padding:6px;display:none;
+    box-shadow:0 10px 30px rgba(0,0,0,.35);min-width:190px}
+  .menu.open{display:block}
+  .menu button{display:block;width:100%;text-align:left;border:0;background:none;color:var(--text);padding:11px 12px;border-radius:10px;font:inherit}
+  .menu button:active{background:var(--surface2)}
+  .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--surface2);color:var(--text);
+    padding:10px 16px;border-radius:12px;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  .preview{display:flex;align-items:center;gap:12px;margin-top:4px}
+  .preview .ico{width:48px;height:48px;font-size:19px;border-radius:14px}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Dock</h1>
+    <button class="iconbtn" id="editBtn" title="Rearrange">✎</button>
+    <button class="iconbtn" id="menuBtn" title="More">⋮</button>
+  </div>
+  <div class="menu" id="menu">
+    <button data-act="install" id="installItem" hidden>Install Dock</button>
+    <button data-act="export">Export backup (.json)</button>
+    <button data-act="import">Import backup</button>
+  </div>
+  <div class="search">
+    <input id="q" type="search" placeholder="Search apps" autocomplete="off">
+    <select id="sort" aria-label="Sort">
+      <option value="custom">Custom</option>
+      <option value="recent">Recent</option>
+      <option value="frequent">Most used</option>
+      <option value="name">A–Z</option>
+    </select>
+  </div>
+</header>
+
+<main id="grid"></main>
+<button class="fab" id="addBtn" aria-label="Add app">+</button>
+<div class="toast" id="toast"></div>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+
+<dialog id="editor">
+  <form method="dialog" id="form">
+    <h2 id="edTitle">Add app</h2>
+    <div class="preview"><div class="ico" id="pv"></div><div class="hint" id="pvHost">Preview</div></div>
+    <label for="fUrl">URL</label>
+    <input id="fUrl" required inputmode="url" placeholder="https://app.example.com" autocomplete="off">
+    <label for="fName">Name</label>
+    <input id="fName" placeholder="Auto from URL" autocomplete="off">
+    <label for="fIcon">Icon URL (optional)</label>
+    <input id="fIcon" inputmode="url" placeholder="Leave blank to use the site's favicon" autocomplete="off">
+    <div class="row">
+      <button type="button" class="btn danger" id="delBtn">Delete</button>
+      <button type="button" class="btn" id="cancelBtn">Cancel</button>
+      <button type="submit" class="btn primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+  const KEY = 'dock.apps.v1', PREF = 'dock.prefs.v1';
+  const $ = id => document.getElementById(id);
+  const grid = $('grid'), q = $('q'), sortSel = $('sort'), dlg = $('editor');
+  let apps = load(KEY, []);
+  let prefs = load(PREF, { sort: 'custom' });
+  let editingId = null, editMode = false, deferredInstall = null;
+
+  function load(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(apps)); } catch {} }
+  function savePrefs(){ try { localStorage.setItem(PREF, JSON.stringify(prefs)); } catch {} }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  function normUrl(u){
+    u = (u || '').trim();
+    if (!u) throw new Error('empty');
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    return new URL(u).href;
+  }
+  function hostOf(u){ try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } }
+  function guessName(u){
+    const h = hostOf(u).split('.');
+    const core = h.length > 2 && h[0].length > 3 ? h[0] : h[h.length - 2] || h[0];
+    return core ? core[0].toUpperCase() + core.slice(1) : 'App';
+  }
+  function favicon(u){ return 'https://www.google.com/s2/favicons?sz=128&domain=' + encodeURIComponent(new URL(u).hostname); }
+  function hue(s){ let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; }
+
+  function iconEl(app, el){
+    el.textContent = '';
+    el.style.background = `hsl(${hue(app.name || app.url)} 55% 45%)`;
+    const letter = () => { el.textContent = (app.name || '?').trim()[0]?.toUpperCase() || '?'; };
+    let src, fav = false;
+    if (app.icon) src = app.icon; else { try { src = favicon(app.url); fav = true; } catch {} }
+    if (!src) return letter();
+    const img = new Image();
+    img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
+    if (fav) { img.className = 'fav'; el.style.background = '#fff'; }
+    img.onerror = () => { el.style.background = `hsl(${hue(app.name || app.url)} 55% 45%)`; letter(); };
+    img.src = src;
+    el.appendChild(img);
+  }
+
+  function sorted(){
+    const list = apps.slice();
+    switch (prefs.sort) {
+      case 'name': return list.sort((a, b) => a.name.localeCompare(b.name));
+      case 'recent': return list.sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0));
+      case 'frequent': return list.sort((a, b) => (b.uses || 0) - (a.uses || 0));
+      default: return list;
+    }
+  }
+
+  function render(){
+    const term = q.value.trim().toLowerCase();
+    const list = sorted().filter(a => !term || a.name.toLowerCase().includes(term) || a.url.toLowerCase().includes(term));
+    grid.textContent = '';
+    grid.classList.toggle('editing', editMode);
+    if (!apps.length) {
+      grid.innerHTML = '<div class="empty"><b>No apps yet</b>Tap + to add a web app, or share a page to Dock from Chrome.</div>';
+      return;
+    }
+    if (!list.length) { grid.innerHTML = '<div class="empty">No matches.</div>'; return; }
+
+    for (const app of list) {
+      const a = document.createElement('a');
+      a.className = 'tile'; a.href = app.url; a.target = '_blank'; a.rel = 'noopener';
+      const ico = document.createElement('div'); ico.className = 'ico'; iconEl(app, ico);
+      const nm = document.createElement('div'); nm.className = 'name'; nm.textContent = app.name;
+      a.append(ico, nm);
+
+      if (editMode && prefs.sort === 'custom' && !term) {
+        const mv = document.createElement('div'); mv.className = 'moves';
+        for (const [txt, d] of [['◀', -1], ['▶', 1]]) {
+          const b = document.createElement('button'); b.textContent = txt;
+          b.onclick = e => { e.preventDefault(); e.stopPropagation(); move(app.id, d); };
+          mv.appendChild(b);
+        }
+        a.appendChild(mv);
+      }
+
+      a.addEventListener('click', e => {
+        if (editMode) { e.preventDefault(); openEditor(app); return; }
+        app.uses = (app.uses || 0) + 1; app.lastUsed = Date.now(); save();
+      });
+      // Long-press on Android fires contextmenu: use it to edit
+      a.addEventListener('contextmenu', e => { e.preventDefault(); openEditor(app); });
+      grid.appendChild(a);
+    }
+  }
+
+  function move(id, d){
+    const i = apps.findIndex(a => a.id === id), j = i + d;
+    if (i < 0 || j < 0 || j >= apps.length) return;
+    [apps[i], apps[j]] = [apps[j], apps[i]];
+    save(); render();
+  }
+
+  function updatePreview(){
+    let url; try { url = normUrl($('fUrl').value); } catch { $('pv').textContent = ''; $('pvHost').textContent = 'Preview'; return; }
+    const app = { url, name: $('fName').value.trim() || guessName(url), icon: $('fIcon').value.trim() };
+    iconEl(app, $('pv'));
+    $('pvHost').textContent = hostOf(url);
+  }
+
+  function openEditor(app, prefill){
+    editingId = app ? app.id : null;
+    $('edTitle').textContent = app ? 'Edit app' : 'Add app';
+    $('delBtn').hidden = !app;
+    $('fUrl').value = app?.url || prefill?.url || '';
+    $('fName').value = app?.name || prefill?.name || '';
+    $('fIcon').value = app?.icon || '';
+    updatePreview();
+    dlg.showModal();
+    if (!app && !prefill?.url) $('fUrl').focus();
+  }
+
+  $('form').addEventListener('submit', e => {
+    e.preventDefault();
+    let url;
+    try { url = normUrl($('fUrl').value); } catch { toast('Enter a valid URL'); return; }
+    const name = $('fName').value.trim() || guessName(url);
+    const icon = $('fIcon').value.trim();
+    if (editingId) {
+      Object.assign(apps.find(a => a.id === editingId), { url, name, icon });
+    } else {
+      if (apps.some(a => a.url === url)) { toast('Already in Dock'); dlg.close(); return; }
+      apps.push({ id: uid(), url, name, icon, added: Date.now(), uses: 0, lastUsed: 0 });
+    }
+    save(); dlg.close(); render(); toast(editingId ? 'Saved' : 'Added ' + name);
+  });
+  $('cancelBtn').onclick = () => dlg.close();
+  $('delBtn').onclick = () => {
+    const app = apps.find(a => a.id === editingId);
+    if (app && confirm(`Remove ${app.name}?`)) {
+      apps = apps.filter(a => a.id !== editingId); save(); dlg.close(); render(); toast('Removed');
+    }
+  };
+  for (const id of ['fUrl', 'fName', 'fIcon']) $(id).addEventListener('input', updatePreview);
+  $('fUrl').addEventListener('blur', () => {
+    if (!$('fName').value.trim()) { try { $('fName').value = guessName(normUrl($('fUrl').value)); updatePreview(); } catch {} }
+  });
+
+  $('addBtn').onclick = () => openEditor(null);
+  $('editBtn').onclick = () => {
+    editMode = !editMode;
+    $('editBtn').classList.toggle('on', editMode);
+    if (editMode && prefs.sort !== 'custom') toast('Switch sort to Custom to rearrange');
+    else if (editMode) toast('Tap an app to edit, arrows to move');
+    render();
+  };
+  q.addEventListener('input', render);
+  sortSel.value = prefs.sort;
+  sortSel.onchange = () => { prefs.sort = sortSel.value; savePrefs(); render(); };
+
+  // Overflow menu
+  const menu = $('menu');
+  $('menuBtn').onclick = e => { e.stopPropagation(); menu.classList.toggle('open'); };
+  document.addEventListener('click', () => menu.classList.remove('open'));
+  menu.addEventListener('click', async e => {
+    const act = e.target.dataset.act; if (!act) return;
+    menu.classList.remove('open');
+    if (act === 'export') {
+      const blob = new Blob([JSON.stringify({ version: 1, apps }, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'dock-backup.json'; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } else if (act === 'import') {
+      $('importFile').click();
+    } else if (act === 'install' && deferredInstall) {
+      deferredInstall.prompt(); await deferredInstall.userChoice; deferredInstall = null; $('installItem').hidden = true;
+    }
+  });
+  $('importFile').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      const incoming = Array.isArray(data) ? data : data.apps;
+      let n = 0;
+      for (const x of incoming || []) {
+        if (!x?.url) continue;
+        const url = normUrl(x.url);
+        if (apps.some(a => a.url === url)) continue;
+        apps.push({ id: uid(), url, name: x.name || guessName(url), icon: x.icon || '', added: Date.now(), uses: 0, lastUsed: 0 });
+        n++;
+      }
+      save(); render(); toast(`Imported ${n} app${n === 1 ? '' : 's'}`);
+    } catch { toast('Invalid backup file'); }
+    e.target.value = '';
+  };
+
+  let tt;
+  function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 1800); }
+
+  // Android share target (?url=&text=&title=) and "Add app" shortcut (?add=1)
+  const p = new URLSearchParams(location.search);
+  if (p.has('url') || p.has('text') || p.has('title') || p.has('add')) {
+    const shared = p.get('url') || (p.get('text') || '').match(/https?:\/\/\S+/)?.[0] || '';
+    history.replaceState(null, '', location.pathname);
+    setTimeout(() => openEditor(null, { url: shared, name: shared ? (p.get('title') || '') : '' }), 50);
+  }
+
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; $('installItem').hidden = false; });
+  window.addEventListener('appinstalled', () => { $('installItem').hidden = true; toast('Dock installed'); });
+  window.addEventListener('storage', e => { if (e.key === KEY) { apps = load(KEY, []); render(); } });
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
+  render();
+})();
+</script>
+</body>
+</html>
