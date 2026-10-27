@@ -281,7 +281,9 @@
     const act = e.target.dataset.act; if (!act) return;
     menu.classList.remove('open');
     if (act === 'export') {
-      const blob = new Blob([JSON.stringify({ version: 1, apps }, null, 2)], { type: 'application/json' });
+      const json = JSON.stringify({ version: 1, apps }, null, 2);
+      if (window.DockAndroid) { window.DockAndroid.saveBackup(json); return; } // Android APK: native save dialog
+      const blob = new Blob([json], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob); a.download = 'dock-backup.json'; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -324,7 +326,8 @@
   window.addEventListener('appinstalled', () => { $('installItem').hidden = true; toast('Dock installed'); });
   window.addEventListener('storage', e => { if (e.key === KEY) { apps = load(KEY, []); render(); } });
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // In the APK the files are bundled locally, so no service worker is needed.
+  if ('serviceWorker' in navigator && !window.DockAndroid) navigator.serviceWorker.register('sw.js').catch(() => {});
   if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
   render();
 })();

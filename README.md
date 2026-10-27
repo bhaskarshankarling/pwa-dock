@@ -22,6 +22,8 @@ No backend, no build step, no dependencies: three static files and some icons.
 ├── index.html             # UI, styles and app logic
 ├── manifest.webmanifest   # install metadata, share_target, shortcuts
 ├── sw.js                  # service worker (offline shell)
+├── android/               # native WebView wrapper (APK)
+├── .github/workflows/     # CI: builds and publishes the APK
 └── icons/                 # 192, 512 and maskable 512 PNGs
 ```
 
@@ -47,6 +49,36 @@ python3 -m http.server 8080
 1. Open the deployed URL in Chrome.
 2. Tap **⋮ → Install app**, or use **Install Dock** in Dock's own ⋮ menu.
 3. Chrome builds a WebAPK. Dock then appears in your app drawer and in the share sheet.
+
+## Android APK (sideload)
+
+If you'd rather not install through Chrome, the `android/` folder holds a small native wrapper. GitHub Actions builds it on every push to `main` and publishes the result to the **[`apk-latest` release](../../releases/tag/apk-latest)**.
+
+- **Install**: download `pwa-dock.apk` on your phone and open it. Allow installs from your browser when Android asks.
+- **Offline, no hosting needed**: the web files are bundled into the APK and served from a local `https://appassets.androidplatform.net` origin via `WebViewAssetLoader`.
+- **Launching apps**: tapping a tile fires an Android `ACTION_VIEW` intent. If an installed PWA (WebAPK) registers a handler for that URL, Android opens it directly. Otherwise the URL opens in your default browser.
+- **Share sheet**: an "Add to Dock" entry is registered for shared text and links (`ACTION_SEND text/plain`).
+- **Backup**: export uses the system "Save to…" dialog, and import uses the system file picker.
+- The APK keeps its own app list, separate from the Chrome-installed PWA. Use export and import to move apps between them.
+
+### Signing (so updates install over the old version)
+
+Without signing secrets, CI signs each build with a throwaway debug key. Android then refuses to install a newer build over the old one, and uninstalling wipes your list. To get stable signing, add these under **Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+|---|---|
+| `DOCK_KEYSTORE_BASE64` | `base64 -w0 dock.keystore` |
+| `DOCK_KEYSTORE_PASSWORD` | keystore password |
+| `DOCK_KEY_ALIAS` | key alias |
+| `DOCK_KEY_PASSWORD` | key password |
+
+Then re-run the workflow from **Actions → Build Android APK → Run workflow**. Keep the keystore backed up, because losing it means the next update requires a reinstall.
+
+### Build locally
+```bash
+cd android
+gradle assembleDebug   # needs JDK 17 + Android SDK (ANDROID_HOME); Gradle 8.7+
+```
 
 ## How it works
 

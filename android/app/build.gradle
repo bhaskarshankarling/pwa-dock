@@ -1,0 +1,68 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Release signing comes from env vars (set by CI from repo secrets).
+// Without them the release build falls back to the debug key.
+def ksPath = System.getenv('DOCK_KEYSTORE')
+def hasReleaseKey = ksPath != null && file(ksPath).exists()
+
+android {
+    namespace 'app.pwadock'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'app.pwadock'
+        minSdk 24
+        targetSdk 34
+        versionCode Integer.parseInt(System.getenv('VERSION_CODE') ?: '1')
+        versionName "1.0.${System.getenv('VERSION_CODE') ?: '1'}"
+    }
+
+    signingConfigs {
+        release {
+            if (hasReleaseKey) {
+                storeFile file(ksPath)
+                storePassword System.getenv('DOCK_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('DOCK_KEY_ALIAS')
+                keyPassword System.getenv('DOCK_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig hasReleaseKey ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+    }
+
+    sourceSets {
+        main {
+            assets.srcDir layout.buildDirectory.dir('generated/web')
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+}
+
+// Bundle the web app from the repo root, so the APK and the hosted PWA are always the same code.
+def webRoot = rootProject.projectDir.parentFile
+def copyWebAssets = tasks.register('copyWebAssets', Copy) {
+    from(webRoot) {
+        include 'index.html', 'manifest.webmanifest', 'icons/**'
+    }
+    into layout.buildDirectory.dir('generated/web/www')
+}
+tasks.named('preBuild') { dependsOn copyWebAssets }

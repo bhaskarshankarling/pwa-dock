@@ -1,4 +1,4 @@
-const CACHE = 'dock-v1';
+const CACHE = 'dock-v2';
 const SHELL = [
   './',
   './index.html',

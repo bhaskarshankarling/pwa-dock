@@ -1,0 +1,67 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.DOCK_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/dock.keystore"
+            echo "DOCK_KEYSTORE=$RUNNER_TEMP/dock.keystore" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No DOCK_KEYSTORE_BASE64 secret: APK is signed with a throwaway debug key, so it cannot be installed as an update over a previous build."
+          fi
+
+      - name: Build release APK
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          DOCK_KEYSTORE_PASSWORD: ${{ secrets.DOCK_KEYSTORE_PASSWORD }}
+          DOCK_KEY_ALIAS: ${{ secrets.DOCK_KEY_ALIAS }}
+          DOCK_KEY_PASSWORD: ${{ secrets.DOCK_KEY_PASSWORD }}
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Collect APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk pwa-dock.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pwa-dock-apk
+          path: pwa-dock.apk
+
+      - name: Publish to "apk-latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete apk-latest --cleanup-tag --yes || true
+          gh release create apk-latest pwa-dock.apk \
+            --target "$GITHUB_SHA" \
+            --title "Dock APK (build ${{ github.run_number }})" \
+            --notes "Latest Android build of Dock from commit ${GITHUB_SHA::7}. Download pwa-dock.apk on your phone and open it to install (allow installs from your browser when prompted)." \
+            --latest
